@@ -41,6 +41,11 @@ enum Judgment: CaseIterable, Hashable {
 
     /// Timing window used to decide whether a hold-note release landed cleanly.
     static let holdReleaseWindowMs: Double = 100
+
+    /// A hold note is scored in fixed-size time slices ("units") rather than as one lump
+    /// event, so longer holds proportionally contribute more score/combo exposure (both
+    /// upside and downside) than shorter ones. See `RuntimeNote.unitCount`.
+    static let holdUnitDuration: TimeInterval = 0.15
 }
 
 func judge(offsetMs: Double) -> Judgment {

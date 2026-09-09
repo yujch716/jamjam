@@ -10,18 +10,22 @@ final class NoteNode: SKNode {
     private let head: SKShapeNode
     private var tail: SKShapeNode?
 
-    init(activeNote: ActiveNote, tailLength: CGFloat) {
+    init(activeNote: ActiveNote, noteWidth: CGFloat, tailLength: CGFloat) {
         self.activeNote = activeNote
         let color = activeNote.lane.uiColor
 
-        let radius = LaneLayout.noteRadius
-        head = SKShapeNode(circleOfRadius: radius)
+        // Pill/stadium shape: corner radius = height / 2 fully rounds the short ends.
+        let height = LaneLayout.noteHeight
+        let cornerRadius = height / 2
+
+        head = SKShapeNode(rectOf: CGSize(width: noteWidth, height: height), cornerRadius: cornerRadius)
         head.fillColor = color
         head.strokeColor = .white
         head.lineWidth = 2
         head.glowWidth = 4
 
-        headGlow = SKShapeNode(circleOfRadius: radius * 1.6)
+        let glowSize = CGSize(width: noteWidth * 1.12, height: height * 1.55)
+        headGlow = SKShapeNode(rectOf: glowSize, cornerRadius: glowSize.height / 2)
         headGlow.fillColor = color.withAlphaComponent(0.35)
         headGlow.strokeColor = .clear
         headGlow.zPosition = -1
@@ -32,8 +36,8 @@ final class NoteNode: SKNode {
         addChild(head)
 
         if activeNote.type == .hold, tailLength > 0 {
-            let width = radius * 1.1
-            let tailShape = SKShapeNode(rectOf: CGSize(width: width, height: tailLength), cornerRadius: width / 2)
+            let tailWidth = noteWidth * 0.62
+            let tailShape = SKShapeNode(rectOf: CGSize(width: tailWidth, height: tailLength), cornerRadius: tailWidth / 2)
             tailShape.fillColor = color.withAlphaComponent(0.5)
             tailShape.strokeColor = .clear
             tailShape.position = CGPoint(x: 0, y: tailLength / 2)

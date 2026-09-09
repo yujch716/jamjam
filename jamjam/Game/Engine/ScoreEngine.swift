@@ -31,17 +31,22 @@ final class ScoreEngine {
     private(set) var combo: Int = 0
     private(set) var maxCombo: Int = 0
     private(set) var counts: [Judgment: Int] = Dictionary(uniqueKeysWithValues: Judgment.allCases.map { ($0, 0) })
-    let totalNotes: Int
 
-    init(totalNotes: Int) {
-        self.totalNotes = totalNotes
+    /// Total scoring "units" in the chart — a tap counts as 1, a hold counts as its
+    /// `RuntimeNote.unitCount` (see there). This, not the raw note count, is the basis for
+    /// `maxPossibleScore`, since a hold note can now contribute multiple judgment events.
+    let totalUnits: Int
+
+    init(totalUnits: Int) {
+        self.totalUnits = totalUnits
     }
 
     var multiplier: Double {
         min(1.0 + Double(combo / 10) * 0.1, 2.0)
     }
 
-    /// Call exactly once per note, with its single collapsed final judgment.
+    /// Call once per scored unit (a tap has exactly one; a hold has one per
+    /// `RuntimeNote.unitCount`, each judged independently as it comes due).
     @discardableResult
     func record(_ judgment: Judgment) -> Int {
         counts[judgment, default: 0] += 1
@@ -63,7 +68,7 @@ final class ScoreEngine {
         return awarded
     }
 
-    var maxPossibleScore: Int { totalNotes * 2 }
+    var maxPossibleScore: Int { totalUnits * 2 }
 
     var achievementPercent: Double {
         guard maxPossibleScore > 0 else { return 0 }

@@ -11,7 +11,7 @@ import SwiftUI
 struct jamjamApp: App {
     var body: some Scene {
         WindowGroup {
-            GameContainerView()
+            RootView()
         }
     }
 }
