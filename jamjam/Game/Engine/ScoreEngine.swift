@@ -84,6 +84,7 @@ final class ScoreEngine {
             counts: counts,
             maxCombo: maxCombo,
             score: score,
+            maxPossibleScore: maxPossibleScore,
             achievementPercent: achievementPercent,
             grade: grade
         )
@@ -94,6 +95,10 @@ struct GameResult: Equatable {
     let counts: [Judgment: Int]
     let maxCombo: Int
     let score: Int
+    /// Kept alongside `achievementPercent` (rather than just the percentage) so multiple
+    /// players' results can be combined into one correctly-weighted overall achievement%,
+    /// even if their charts ever end up with different unit counts.
+    let maxPossibleScore: Int
     let achievementPercent: Double
     let grade: Grade
 

@@ -4,7 +4,7 @@ import Combine
 enum Route: Hashable {
     case songList
     case playerSetup(Song)
-    case game
+    case game(instruments: [Instrument])
 }
 
 /// Single source of truth for the navigation stack, shared via environment so any screen
@@ -19,5 +19,11 @@ final class AppRouter: ObservableObject {
 
     func goHome() {
         path.removeAll()
+    }
+
+    /// Pops back to the song list, discarding player-setup/game screens above it — used by
+    /// the in-game pause menu's "곡 선택 화면으로 돌아가기".
+    func goToSongList() {
+        path = [.songList]
     }
 }

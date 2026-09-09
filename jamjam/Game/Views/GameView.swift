@@ -1,8 +1,30 @@
 import SwiftUI
 import SpriteKit
 
+/// One independent play window: its own `RhythmScene` + `GameState`, reused as-is whether
+/// it fills the whole screen (1-player) or one cell of a multiplayer grid. `chartLoader`
+/// defaults to the shared dummy chart everyone uses today, but is a real closure (not a
+/// hardcoded call) so a future per-instrument chart can be handed to a specific window
+/// without changing this type.
+///
+/// Deliberately does NOT call `.ignoresSafeArea()` itself — the caller applies that once at
+/// whatever level actually spans the full screen (a single call site for 1-player, or the
+/// whole multiplayer grid for 2P/4P), so this view just fills whatever frame it's given.
 struct GameView: View {
     @ObservedObject var gameState: GameState
+    /// Which instrument this window is playing — shown as a small badge in its own HUD so a
+    /// multiplayer grid of otherwise-identical windows can be told apart at a glance.
+    var instrument: Instrument? = nil
+    var chartLoader: () throws -> [RuntimeNote] = ChartLoader.loadDummyChart
+    /// Diagnostic-only tag forwarded to `RhythmScene` (see there) — empty for the 1-player
+    /// call site, distinct per slot in multiplayer.
+    var windowLabel: String = ""
+    /// Non-nil only for the one window that should show the pause button in its own HUD (the
+    /// single window in 1-player, or specifically Player 1's in multiplayer) — see
+    /// `PauseButton`'s doc comment for why this lives per-window instead of floating at a
+    /// fixed screen position.
+    var onPauseTapped: (() -> Void)? = nil
+
     @State private var scene: RhythmScene?
     @State private var loadErrorMessage: String?
 
@@ -13,8 +35,24 @@ struct GameView: View {
                 if let scene {
                     SpriteView(scene: scene)
                 }
-                HUDView()
+                HUDView(windowHeight: geometry.size.height, instrument: instrument)
                     .environmentObject(gameState)
+
+                if let onPauseTapped {
+                    let scale = geometry.size.height / HUDView.referenceWindowHeight
+                    VStack {
+                        HStack {
+                            Spacer()
+                            PauseButton(action: onPauseTapped)
+                                .padding(.trailing, 16)
+                                // Clears this window's own SCORE/COMBO HUD row, scaled the
+                                // same way HUDView scales its fonts so this still sits just
+                                // below that row in a smaller multiplayer window.
+                                .padding(.top, 70 * scale)
+                        }
+                        Spacer()
+                    }
+                }
             }
             .onAppear {
                 guard scene == nil else { return }
@@ -29,8 +67,10 @@ struct GameView: View {
                 // where notes are actually drawn.
                 scene?.size = newSize
             }
+            .onChange(of: gameState.isPaused) { _, isPaused in
+                scene?.setPaused(isPaused)
+            }
         }
-        .ignoresSafeArea()
         .alert("채보 로드 실패", isPresented: Binding(
             get: { loadErrorMessage != nil },
             set: { if !$0 { loadErrorMessage = nil } }
@@ -43,8 +83,8 @@ struct GameView: View {
 
     private func setUpScene(size: CGSize) {
         do {
-            let notes = try ChartLoader.loadDummyChart()
-            scene = RhythmScene(size: size, runtimeNotes: notes, gameState: gameState)
+            let notes = try chartLoader()
+            scene = RhythmScene(size: size, runtimeNotes: notes, gameState: gameState, windowLabel: windowLabel)
         } catch {
             loadErrorMessage = error.localizedDescription
         }

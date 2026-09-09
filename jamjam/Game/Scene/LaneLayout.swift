@@ -4,18 +4,30 @@ import CoreGraphics
 /// Pure geometry helpers for placing lanes/notes within the scene — no SpriteKit types,
 /// just CGFloat math, so it's trivial to reason about and adjust independently of the scene.
 enum LaneLayout {
-    static let judgmentLineYRatio: CGFloat = 0.18
+    static let judgmentLineYRatio: CGFloat = 0.10
     static let spawnYRatio: CGFloat = 0.98
 
     /// Note visuals are a thick pill (rounded rect), not a circle — width is a fraction of
-    /// the lane's width (leaving a gap to the lane dividers), height is fixed, and corner
-    /// radius is half the height so the ends are fully round (stadium shape).
+    /// the lane's width (leaving a gap to the lane dividers), height and the judgment zone
+    /// band are fractions of scene height, and corner radius is half the height so the ends
+    /// are fully round (stadium shape). Everything is ratio-based (never a fixed point value)
+    /// so a quarter-screen 4-player window scales down proportionally instead of the same
+    /// absolute sizes looking oversized/overlapping in a much smaller window.
     static let noteWidthRatio: CGFloat = 0.72
-    static let noteHeight: CGFloat = 34
+    static let noteHeightRatio: CGFloat = 0.029
 
-    /// Judgment zone: a fixed-size band straddling the judgment line, taller than a single
-    /// note, that acts as both the visible "hit zone" and the touch hit-test region.
-    static let judgmentZoneHeight: CGFloat = 64
+    /// Judgment zone: a band straddling the judgment line, taller than a single note, that
+    /// acts as the visible "hit zone" guide (the touch hit-test region itself is separately
+    /// derived from timing, see `hitTestYRange`, and is intentionally larger than this).
+    static let judgmentZoneHeightRatio: CGFloat = 0.054
+
+    static func noteHeight(sceneHeight: CGFloat) -> CGFloat {
+        sceneHeight * noteHeightRatio
+    }
+
+    static func judgmentZoneHeight(sceneHeight: CGFloat) -> CGFloat {
+        sceneHeight * judgmentZoneHeightRatio
+    }
 
     static func laneCount() -> Int { Lane.allCases.count }
 

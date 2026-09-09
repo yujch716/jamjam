@@ -5,8 +5,7 @@ struct PlayerSetupView: View {
     @EnvironmentObject private var router: AppRouter
 
     @State private var playerCount = 1
-    @State private var selectedInstrument: Instrument?
-    @State private var showMultiplayerNotice = false
+    @State private var selectedInstruments: [Instrument] = []
 
     private let playerCountOptions = [1, 2, 4]
 
@@ -42,34 +41,39 @@ struct PlayerSetupView: View {
                 Spacer()
 
                 Button {
-                    router.push(.game)
+                    router.push(.game(instruments: selectedInstruments))
                 } label: {
                     Text("재생")
                         .font(.headline.weight(.bold))
                         .frame(maxWidth: 240)
                         .padding()
-                        .background(selectedInstrument == nil ? Color.white.opacity(0.05) : Color.cyan.opacity(0.2))
-                        .foregroundStyle(selectedInstrument == nil ? Color.white.opacity(0.3) : .cyan)
+                        .background(Color.cyan.opacity(0.2))
+                        .foregroundStyle(.cyan)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                         .overlay(
                             RoundedRectangle(cornerRadius: 14)
-                                .stroke(selectedInstrument == nil ? Color.white.opacity(0.15) : Color.cyan, lineWidth: 1)
+                                .stroke(Color.cyan, lineWidth: 1)
                         )
                 }
-                .disabled(selectedInstrument == nil)
                 .padding(.bottom, 24)
             }
         }
         .navigationTitle("인원/악기 선택")
-        .onAppear {
-            if selectedInstrument == nil {
-                selectedInstrument = song.availableInstruments.first
-            }
+        .onAppear { syncInstrumentSlots() }
+        .onChange(of: playerCount) { _, _ in syncInstrumentSlots() }
+    }
+
+    /// Keeps `selectedInstruments` sized to `playerCount`, defaulting new slots to a
+    /// different available instrument each (cycling if there are more players than
+    /// instruments) so players don't all default onto the same one.
+    private func syncInstrumentSlots() {
+        guard !song.availableInstruments.isEmpty else { return }
+        while selectedInstruments.count < playerCount {
+            let next = song.availableInstruments[selectedInstruments.count % song.availableInstruments.count]
+            selectedInstruments.append(next)
         }
-        .alert("안내", isPresented: $showMultiplayerNotice) {
-            Button("확인", role: .cancel) {}
-        } message: {
-            Text("멀티플레이는 다음 업데이트에서 지원돼요. 지금은 1인 모드로 진행됩니다.")
+        if selectedInstruments.count > playerCount {
+            selectedInstruments.removeLast(selectedInstruments.count - playerCount)
         }
     }
 
@@ -77,7 +81,6 @@ struct PlayerSetupView: View {
         let isSelected = playerCount == count
         return Button {
             playerCount = count
-            if count != 1 { showMultiplayerNotice = true }
         } label: {
             Text("\(count)인")
                 .font(.headline.weight(.bold))
@@ -92,39 +95,32 @@ struct PlayerSetupView: View {
         }
     }
 
-    @ViewBuilder
     private func instrumentSlot(index: Int) -> some View {
-        if index == 0 {
-            Menu {
-                ForEach(song.availableInstruments, id: \.self) { instrument in
-                    Button(instrument.displayName) { selectedInstrument = instrument }
+        let selected = selectedInstruments.indices.contains(index) ? selectedInstruments[index] : nil
+        return Menu {
+            ForEach(song.availableInstruments, id: \.self) { instrument in
+                Button(instrument.label) {
+                    guard selectedInstruments.indices.contains(index) else { return }
+                    selectedInstruments[index] = instrument
                 }
-            } label: {
-                slotLabel(
-                    text: selectedInstrument?.displayName ?? "악기 선택",
-                    color: selectedInstrument?.neonColor ?? .white,
-                    enabled: true
-                )
             }
-        } else {
-            // Only the first slot is functional for now — multiplayer windows aren't
-            // implemented, so a real 2P/4P game never actually launches yet (see the
-            // multiplayer notice above).
-            slotLabel(text: "1인 모드에서는 사용되지 않음", color: .white, enabled: false)
-        }
-    }
-
-    private func slotLabel(text: String, color: Color, enabled: Bool) -> some View {
-        Text(text)
-            .font(.subheadline.weight(.semibold))
-            .frame(maxWidth: .infinity)
+        } label: {
+            HStack {
+                Text("PLAYER \(index + 1)")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.white.opacity(0.5))
+                Spacer()
+                Text(selected?.label ?? "악기 선택")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(selected?.neonColor ?? .white)
+            }
             .padding()
-            .background(Color.white.opacity(enabled ? 0.06 : 0.03))
-            .foregroundStyle(enabled ? color : Color.white.opacity(0.3))
+            .background(Color.white.opacity(0.06))
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(color.opacity(enabled ? 0.6 : 0.15), lineWidth: 1)
+                    .stroke((selected?.neonColor ?? .white).opacity(0.6), lineWidth: 1)
             )
+        }
     }
 }

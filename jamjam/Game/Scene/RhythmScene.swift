@@ -1,3 +1,4 @@
+import Foundation
 import SpriteKit
 
 final class RhythmScene: SKScene {
@@ -11,6 +12,13 @@ final class RhythmScene: SKScene {
 
     private var songStartTime: TimeInterval?
     private var hasFinished = false
+    /// Wall-clock time (`ProcessInfo.systemUptime`, same timebase as `update(_:)`'s
+    /// `currentTime` and `UITouch.timestamp`) when the pause menu paused this scene. Used to
+    /// shift `songStartTime` forward by however long the pause lasted on resume — without
+    /// this, `elapsed = currentTime - songStartTime` would jump forward by the real-world
+    /// pause duration the instant play resumes, since SpriteKit's own clock keeps advancing
+    /// in wall-clock terms even while `isPaused` merely stops it from calling `update(_:)`.
+    private var pauseStartWallTime: TimeInterval?
 
     /// Extra slack added only to the *safety-net* auto-resolve sweep timers (never to the
     /// actual ms-based judgment math, which is always computed from touch.timestamp). This
@@ -31,11 +39,18 @@ final class RhythmScene: SKScene {
     let scoreEngine: ScoreEngine
     weak var gameState: GameState?
 
-    init(size: CGSize, runtimeNotes: [RuntimeNote], gameState: GameState) {
+    /// Diagnostic-only tag identifying which window this scene belongs to (e.g. "P1-bottom",
+    /// "P2-top") — included in every debug log line so a multiplayer touch-routing bug (a
+    /// touch meant for one window's SKView somehow affecting another window's scene) would
+    /// show up unambiguously as a touch/score event logged under the WRONG window's tag.
+    private let windowLabel: String
+
+    init(size: CGSize, runtimeNotes: [RuntimeNote], gameState: GameState, windowLabel: String = "") {
         self.allNotes = runtimeNotes.map { ActiveNote(runtime: $0) }
         let totalUnits = runtimeNotes.reduce(0) { $0 + $1.unitCount }
         self.scoreEngine = ScoreEngine(totalUnits: totalUnits)
         self.gameState = gameState
+        self.windowLabel = windowLabel
         super.init(size: size)
         scaleMode = .resizeFill
     }
@@ -65,7 +80,7 @@ final class RhythmScene: SKScene {
     }
 
     private func setUpJudgmentZone() {
-        let zoneHeight = LaneLayout.judgmentZoneHeight
+        let zoneHeight = LaneLayout.judgmentZoneHeight(sceneHeight: size.height)
         let zone = SKShapeNode(rectOf: CGSize(width: size.width, height: zoneHeight))
         zone.position = CGPoint(x: size.width / 2, y: LaneLayout.judgmentLineY(sceneHeight: size.height))
         zone.fillColor = SKColor.white.withAlphaComponent(0.10)
@@ -86,7 +101,7 @@ final class RhythmScene: SKScene {
 
     private func setUpLaneHighlights() {
         let width = LaneLayout.laneWidth(sceneWidth: size.width)
-        let height = LaneLayout.judgmentZoneHeight
+        let height = LaneLayout.judgmentZoneHeight(sceneHeight: size.height)
         laneHighlightNodes = Lane.allCases.map { lane in
             let node = SKShapeNode(rectOf: CGSize(width: width, height: height))
             node.position = CGPoint(
@@ -101,6 +116,26 @@ final class RhythmScene: SKScene {
             addChild(node)
             return node
         }
+    }
+
+    // MARK: - Pause / resume (driven by GameState.isPaused, see GameView)
+
+    /// Pausing stops SpriteKit from calling `update(_:)` at all (via the inherited
+    /// `isPaused`), which freezes note positions/spawning/auto-miss sweeps immediately — no
+    /// extra bookkeeping needed for that half. Resuming needs one correction: shift
+    /// `songStartTime` forward by the real-world pause duration, so the chart's timeline
+    /// picks up exactly where it left off instead of jumping forward by however long the
+    /// menu was open.
+    func setPaused(_ paused: Bool) {
+        guard paused != isPaused else { return }
+        if paused {
+            pauseStartWallTime = ProcessInfo.processInfo.systemUptime
+        } else if let pauseStart = pauseStartWallTime, let startTime = songStartTime {
+            let pausedDuration = ProcessInfo.processInfo.systemUptime - pauseStart
+            songStartTime = startTime + pausedDuration
+            pauseStartWallTime = nil
+        }
+        isPaused = paused
     }
 
     // MARK: - Update loop
@@ -136,7 +171,8 @@ final class RhythmScene: SKScene {
             tailLength = 0
         }
         let noteWidth = LaneLayout.noteWidth(sceneWidth: size.width)
-        let node = NoteNode(activeNote: note, noteWidth: noteWidth, tailLength: tailLength)
+        let noteHeight = LaneLayout.noteHeight(sceneHeight: size.height)
+        let node = NoteNode(activeNote: note, noteWidth: noteWidth, noteHeight: noteHeight, tailLength: tailLength)
         node.position = CGPoint(
             x: LaneLayout.laneCenterX(lane: note.lane, sceneWidth: size.width),
             y: LaneLayout.spawnY(sceneHeight: size.height)
@@ -147,6 +183,7 @@ final class RhythmScene: SKScene {
     }
 
     private func positionOnScreenNotes(elapsed: TimeInterval) {
+        let travelPixels = LaneLayout.spawnY(sceneHeight: size.height) - LaneLayout.judgmentLineY(sceneHeight: size.height)
         for note in activeSpawnedNotes {
             let spawnElapsed = note.startTime - travelDuration
             var progress = CGFloat((elapsed - spawnElapsed) / travelDuration)
@@ -156,6 +193,16 @@ final class RhythmScene: SKScene {
                 // hold duration, carrying it (and, at completion, its particle burst) off the
                 // bottom of the screen for long holds.
                 progress = min(progress, 1.0)
+
+                // Shrink the tail to reflect exactly how much hold time is left, in the same
+                // points-per-second the note fell at — this is the player's only visual cue
+                // for when to release, so it has to actually count down while held (previously
+                // it stayed at its full pre-press length the whole time).
+                if let endTime = note.endTime {
+                    let remainingSeconds = max(0, endTime - elapsed)
+                    let remainingLength = CGFloat(remainingSeconds / travelDuration) * travelPixels
+                    note.node?.updateTailRemaining(remainingLength)
+                }
             }
             note.node?.position.y = LaneLayout.noteY(progress: progress, sceneHeight: size.height)
         }
@@ -230,6 +277,7 @@ final class RhythmScene: SKScene {
     /// Marks a note fully done — no more units to score — removes it from the active list,
     /// and plays its one-time completion visuals (particle burst + fade-out + zone pulse).
     private func finalizeNote(_ note: ActiveNote, lastJudgment: Judgment) {
+        debugLog("FINALIZE note=\(note.runtime.id) type=\(note.type) startTime=\(String(format: "%.2f", note.startTime)) lastJudgment=\(lastJudgment.label) counts-so-far=\(scoreEngine.counts)")
         note.isJudged = true
         note.holdState = .completed(finalJudgment: lastJudgment)
         activeSpawnedNotes.removeAll { $0 === note }
@@ -284,6 +332,11 @@ final class RhythmScene: SKScene {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches {
+            // Logged unconditionally, before any filtering, so a touch that's misrouted to
+            // the wrong window's SKView (rather than genuinely intended for this one) would
+            // show up here under this scene's own windowLabel regardless of what happens next.
+            let raw = touch.location(in: self)
+            debugLog("RAW touchesBegan sceneSize=\(size) locationInScene=\(raw)")
             if trackedTouches.count >= maxConcurrentTouches { break }
             let id = ObjectIdentifier(touch)
             guard trackedTouches[id] == nil else { continue }
@@ -431,7 +484,8 @@ final class RhythmScene: SKScene {
 
     private func debugLog(_ message: @autoclosure () -> String) {
         #if DEBUG
-        print("[RhythmScene] \(message())")
+        let tag = windowLabel.isEmpty ? "" : "[\(windowLabel)]"
+        print("[RhythmScene]\(tag) \(message())")
         #endif
     }
 }

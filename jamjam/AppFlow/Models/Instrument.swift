@@ -19,6 +19,19 @@ enum Instrument: String, CaseIterable, Hashable, Codable {
         }
     }
 
+    var emoji: String {
+        switch self {
+        case .guitar: return "🎸"
+        case .drum: return "🥁"
+        case .bass: return "🎻"
+        case .piano: return "🎹"
+        }
+    }
+
+    /// "🎸 기타" — the combined label used wherever a window/card needs to identify its
+    /// instrument at a glance (game HUD badge, result screen cards).
+    var label: String { "\(emoji) \(displayName)" }
+
     var neonColor: Color {
         switch self {
         case .guitar: return Color(red: 1.0, green: 0.18, blue: 0.61)

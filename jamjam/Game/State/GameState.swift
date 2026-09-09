@@ -14,11 +14,15 @@ final class GameState: ObservableObject {
     @Published var combo: Int = 0
     @Published var lastJudgment: JudgmentPopup?
     @Published var result: GameResult?
+    /// Set by the pause menu, observed by `GameView` to pause/resume its own `RhythmScene`
+    /// (which also shifts its internal timeline by however long it was paused).
+    @Published var isPaused: Bool = false
 
     func reset() {
         score = 0
         combo = 0
         lastJudgment = nil
         result = nil
+        isPaused = false
     }
 }
