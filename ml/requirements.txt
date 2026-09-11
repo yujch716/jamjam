@@ -1,0 +1,13 @@
+# Python 3.11 virtual environment (see README.md for setup steps).
+#
+# torch/numpy are pinned BELOW what pip would resolve by default — both downgrades were
+# required to get past real bugs hit while testing the Core ML conversion path (see
+# README.md "Core ML conversion attempt" section for the exact errors):
+#   - coremltools 9.0 has not been tested against very new torch releases.
+#   - coremltools 9.0's int-cast op calls `int(some_1_element_ndarray)`, which numpy 2.x no
+#     longer allows implicitly (only true 0-d arrays) — numpy<2 avoids this.
+# demucs's own separation pipeline (scripts/separate.py) works fine with these same pins.
+demucs==4.1.0
+torch==2.7.0
+numpy==1.26.4
+coremltools==9.0
