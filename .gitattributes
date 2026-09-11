@@ -1,0 +1,18 @@
+# Core ML model bundles are directories (.mlpackage) containing the actual large binary
+# weights nested a few levels down (Data/com.apple.CoreML/weights/weight.bin, etc.) — the
+# "**/" prefix is required for these two directory-bundle patterns specifically, since a
+# pattern with a slash in the middle (like "*.mlpackage/**") is otherwise anchored to the
+# repo root and would silently fail to match a .mlpackage nested under jamjam/Resources/.
+**/*.mlpackage/** filter=lfs diff=lfs merge=lfs -text
+**/*.mlmodelc/** filter=lfs diff=lfs merge=lfs -text
+
+# Plain-extension patterns match at any depth by default (no "**/" needed) — covers the
+# .mlpackage-internal binaries above by extension too (belt and suspenders against any
+# future Core ML packaging layout change), plus other large ML binaries that may show up
+# later (e.g. the onset CNN's PyTorch training checkpoints, or an intermediate ONNX export).
+*.mlmodel filter=lfs diff=lfs merge=lfs -text
+*.bin filter=lfs diff=lfs merge=lfs -text
+*.pt filter=lfs diff=lfs merge=lfs -text
+*.pth filter=lfs diff=lfs merge=lfs -text
+*.ckpt filter=lfs diff=lfs merge=lfs -text
+*.onnx filter=lfs diff=lfs merge=lfs -text
