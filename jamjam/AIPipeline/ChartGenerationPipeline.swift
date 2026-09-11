@@ -91,8 +91,9 @@ enum ChartGenerationPipeline {
                 y: mono22k, sampleRate: MelSpectrogram.sampleRate, onsetTimes: onsetTimes,
                 hopLength: MelSpectrogram.hopLength
             )
+            let filteredNotes = MinSeparationFilter.apply(rawNotes)
             var rng = SystemRandomNumberGenerator()
-            charts[instrument] = LaneAssigner.assign(rawNotes, rng: &rng)
+            charts[instrument] = LaneAssigner.assign(filteredNotes, rng: &rng)
         }
 
         progress("완료", 1.0)

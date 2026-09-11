@@ -112,6 +112,43 @@ def classify_notes(
     return notes
 
 
+#: Below this gap (seconds) between two consecutive onsets in the same instrument track,
+#: the weaker one is dropped by `filter_min_separation` — raw onset-CNN output can be
+#: dense enough to be physically unplayable and visually cluttered on screen, so this
+#: thins it to a playable density before lane assignment. Exposed as a module-level
+#: constant (rather than buried in the function default) since this is exactly the kind
+#: of "feel" knob that's expected to need re-tuning after actual play-testing.
+MIN_NOTE_SEPARATION_SECONDS = 0.13
+
+
+def filter_min_separation(notes: list[dict], min_separation_seconds: float = MIN_NOTE_SEPARATION_SECONDS) -> list[dict]:
+    """Enforces a minimum time gap between consecutive onsets within one instrument
+    track: whenever two onsets are closer together than `min_separation_seconds`, drops
+    the weaker one (by `_intensity`) and keeps the stronger. Applied after onset
+    detection/classification (so `_intensity` is already computed) and before lane
+    assignment — thins an over-dense chart down to its strongest, most musically salient
+    hits rather than every raw onset-CNN blip.
+
+    Single left-to-right pass with backward re-checking: when an incoming note beats the
+    last accepted one, that accepted note is popped and the incoming note is re-compared
+    against whichever note is now last (in case removing the loser closes an
+    now-too-small gap further back) — same shape as `pick_peaks`'s NMS loop, generalized
+    from frame-index/probability to time/intensity.
+    """
+    ordered = sorted(notes, key=lambda n: n["time"])
+    accepted: list[dict] = []
+    for note in ordered:
+        current: dict | None = note
+        while accepted and current is not None and current["time"] - accepted[-1]["time"] < min_separation_seconds:
+            if current.get("_intensity", 0.0) >= accepted[-1].get("_intensity", 0.0):
+                accepted.pop()
+            else:
+                current = None
+        if current is not None:
+            accepted.append(current)
+    return accepted
+
+
 def assign_lanes(
     notes: list[dict],
     lane_count: int = 4,

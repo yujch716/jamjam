@@ -32,7 +32,9 @@ sys.path.insert(0, str(ML_ROOT / "scripts"))
 sys.path.insert(0, str(ML_ROOT / "scripts" / "onset"))
 
 import htdemucs_split as split  # noqa: E402
-from note_classification import pick_peaks, classify_notes, compute_silence_mask, assign_lanes  # noqa: E402
+from note_classification import (  # noqa: E402
+    pick_peaks, classify_notes, compute_silence_mask, filter_min_separation, assign_lanes,
+)
 from model import OnsetCNN  # noqa: E402
 import melspec as onset_melspec  # noqa: E402
 
@@ -51,6 +53,7 @@ LANE_COUNT = 4
 SIMULTANEOUS_RATIO = 0.175  # top ~17.5% of onsets by intensity become 2-lane notes
 COLLISION_WINDOW_SECONDS = 0.15
 LANE_SEED = 42  # fixed for this test script so re-runs are directly comparable
+MIN_NOTE_SEPARATION_SECONDS = 0.13  # see note_classification.filter_min_separation
 
 ONSET_CHECKPOINT = ML_ROOT / "output" / "onset_model" / "onset_cnn_best.pt"
 OUTPUT_ROOT = ML_ROOT / "output" / "full_pipeline"
@@ -142,12 +145,34 @@ def detect_notes(onset_model: OnsetCNN, y_stereo: np.ndarray, sr: int) -> list[d
         hop_length=int(sr / onset_melspec.FRAME_RATE),
         hold_min_duration=HOLD_MIN_DURATION, sustain_ratio=SUSTAIN_RATIO,
     )
+    n_onsets_raw = len(notes)
+    notes = filter_min_separation(notes, min_separation_seconds=MIN_NOTE_SEPARATION_SECONDS)
     n_onsets = len(notes)
     notes = assign_lanes(
         notes, lane_count=LANE_COUNT, simultaneous_ratio=SIMULTANEOUS_RATIO,
         collision_window=COLLISION_WINDOW_SECONDS, rng=np.random.default_rng(LANE_SEED),
     )
-    return notes, log_mel, probs, n_onsets
+    return notes, log_mel, probs, n_onsets, n_onsets_raw
+
+
+def max_notes_per_second(notes: list[dict]) -> float:
+    """Peak *distinct onset* rate over any 1-second sliding window — a much more honest
+    "how crowded does this actually get" number than the whole-song average, which hides
+    bursty sections (a drum fill) behind quiet ones. Deduplicates by time first: a
+    simultaneous-2-lane promotion writes 2 entries at the identical timestamp (one hand
+    motion, two lanes at once), which isn't a sequential-reaction-speed demand the way
+    two closely-spaced *distinct* onsets are, so counting both would overstate how
+    physically demanding the chart actually is."""
+    times = sorted(set(n["time"] for n in notes))
+    if not times:
+        return 0.0
+    best = 0
+    left = 0
+    for right in range(len(times)):
+        while times[right] - times[left] > 1.0:
+            left += 1
+        best = max(best, right - left + 1)
+    return float(best)
 
 
 def make_click_track(y_stereo: np.ndarray, sr: int, notes: list[dict]) -> np.ndarray:
@@ -281,7 +306,7 @@ def main():
     for game_instrument, source_name in GAME_INSTRUMENTS.items():
         print(f"\n[pipeline] === {game_instrument} (source: {source_name}) ===")
         y_stereo = stems[source_name]
-        notes, log_mel, probs, n_onsets = detect_notes(onset_model, y_stereo, sr)
+        notes, log_mel, probs, n_onsets, n_onsets_raw = detect_notes(onset_model, y_stereo, sr)
 
         chart_path = out_dir / f"{game_instrument}_chart.json"
         with open(chart_path, "w") as f:
@@ -298,6 +323,7 @@ def main():
         n_hold = sum(1 for n in notes if n["type"] == "hold")
         duration_s = y_stereo.shape[-1] / sr
         density = len(notes) / duration_s if duration_s > 0 else 0
+        max_density = max_notes_per_second(notes)
 
         # a promoted onset shows up as 2 entries sharing the exact same "time"
         from collections import Counter
@@ -308,17 +334,24 @@ def main():
         summary[game_instrument] = {
             "total_notes": len(notes), "tap": n_tap, "hold": n_hold,
             "notes_per_second": round(density, 2),
+            "max_notes_per_second": round(max_density, 2),
+            "onsets_before_min_separation_filter": n_onsets_raw,
+            "onsets_after_min_separation_filter": n_onsets,
             "onsets": n_onsets, "simultaneous_onsets": n_promoted_onsets,
             "simultaneous_pct": round(promoted_pct, 1),
         }
+        print(f"[pipeline] {game_instrument}: onsets {n_onsets_raw} -> {n_onsets} after "
+              f"min-separation filter ({MIN_NOTE_SEPARATION_SECONDS * 1000:.0f}ms)")
         print(f"[pipeline] {game_instrument}: {len(notes)} notes (tap={n_tap}, hold={n_hold}), "
-              f"{density:.2f} notes/sec | {n_promoted_onsets}/{n_onsets} onsets "
+              f"avg {density:.2f}/s, max {max_density:.2f}/s | {n_promoted_onsets}/{n_onsets} onsets "
               f"({promoted_pct:.1f}%) promoted to simultaneous 2-lane notes")
 
     print("\n[pipeline] === SUMMARY ===")
     for inst, s in summary.items():
         print(f"  {inst:8s}: {s['total_notes']:4d} notes "
-              f"(tap={s['tap']}, hold={s['hold']}), {s['notes_per_second']:.2f}/s, "
+              f"(tap={s['tap']}, hold={s['hold']}), avg {s['notes_per_second']:.2f}/s, "
+              f"max {s['max_notes_per_second']:.2f}/s, "
+              f"onsets {s['onsets_before_min_separation_filter']} -> {s['onsets_after_min_separation_filter']}, "
               f"simultaneous {s['simultaneous_onsets']}/{s['onsets']} ({s['simultaneous_pct']:.1f}%)")
     with open(out_dir / "summary.json", "w") as f:
         json.dump(summary, f, indent=2)
