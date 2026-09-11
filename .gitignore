@@ -15,3 +15,14 @@ xcuserdata/
 *.dSYM
 
 .DS_Store
+
+# ML (Python) — venv and generated artifacts are local-only, never committed.
+# Test audio (mp3/wav) also stays local: unclear licensing to redistribute in git history.
+# ml/datasets/ is downloaded training data (13GB+), never committed either.
+ml/venv/
+ml/output/
+ml/test-assets/
+ml/datasets/
+__pycache__/
+*.pyc
+
