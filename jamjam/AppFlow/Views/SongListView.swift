@@ -13,6 +13,12 @@ struct SongListView: View {
     @State private var importProgress: Double = 0
     @State private var errorMessage: String?
     @State private var pendingDeleteSong: Song?
+    @State private var filterMode: FilterMode = .all
+
+    private enum FilterMode: Hashable {
+        case all
+        case favoritesOnly
+    }
 
     /// `library.songs` is already sorted newest-first (see `SongLibraryStore.load`) —
     /// splitting it into these two keeps that relative order within each group, just
@@ -25,23 +31,46 @@ struct SongListView: View {
             Color(red: 0.04, green: 0.05, blue: 0.10)
                 .ignoresSafeArea()
 
-            List {
-                if !favoriteSongs.isEmpty {
-                    Section {
-                        songRows(favoriteSongs)
-                    } header: {
-                        Text("⭐ 즐겨찾기").foregroundStyle(.white.opacity(0.6))
-                    }
-                    Section {
-                        songRows(otherSongs)
-                    } header: {
-                        Text("전체 곡").foregroundStyle(.white.opacity(0.6))
-                    }
-                } else {
-                    songRows(otherSongs)
+            VStack(spacing: 0) {
+                Picker("보기", selection: $filterMode) {
+                    Text("전체").tag(FilterMode.all)
+                    Text("⭐ 즐겨찾기").tag(FilterMode.favoritesOnly)
                 }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                .padding(.top, 8)
+
+                List {
+                    switch filterMode {
+                    case .all:
+                        if !favoriteSongs.isEmpty {
+                            Section {
+                                songRows(favoriteSongs)
+                            } header: {
+                                Text("⭐ 즐겨찾기").foregroundStyle(.white.opacity(0.6))
+                            }
+                            Section {
+                                songRows(otherSongs)
+                            } header: {
+                                Text("전체 곡").foregroundStyle(.white.opacity(0.6))
+                            }
+                        } else {
+                            songRows(otherSongs)
+                        }
+                    case .favoritesOnly:
+                        if favoriteSongs.isEmpty {
+                            Text("즐겨찾기한 곡이 없어요")
+                                .foregroundStyle(.white.opacity(0.4))
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .listRowBackground(Color.clear)
+                                .padding(.vertical, 40)
+                        } else {
+                            songRows(favoriteSongs)
+                        }
+                    }
+                }
+                .scrollContentBackground(.hidden)
             }
-            .scrollContentBackground(.hidden)
 
             if isImporting {
                 importOverlay
@@ -124,6 +153,10 @@ struct SongListView: View {
         }
     }
 
+    /// Every row exposes its delete action as an always-visible trash button (not only the
+    /// `.swipeActions` swipe gesture below, which is easy to miss/discover) — per-row
+    /// `Button`s throughout (rather than a whole-row `.onTapGesture`) also keep this
+    /// reliably compatible with swipe-to-delete instead of the two gestures competing.
     private func songRow(_ song: Song) -> some View {
         HStack(spacing: 12) {
             Button {
@@ -134,24 +167,35 @@ struct SongListView: View {
             }
             .buttonStyle(.plain)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(song.title)
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                statusLabel(for: song)
+            Button {
+                router.push(.playerSetup(song))
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(song.title)
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        statusLabel(for: song)
+                    }
+                    Spacer()
+                    if song.status == .ready {
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(.white.opacity(0.3))
+                    }
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .disabled(song.status != .ready)
 
-            Spacer()
-
-            if song.status == .ready {
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(.white.opacity(0.3))
+            Button(role: .destructive) {
+                pendingDeleteSong = song
+            } label: {
+                Image(systemName: "trash")
+                    .foregroundStyle(.red.opacity(0.75))
             }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            guard song.status == .ready else { return }
-            router.push(.playerSetup(song))
+            .buttonStyle(.plain)
         }
     }
 
