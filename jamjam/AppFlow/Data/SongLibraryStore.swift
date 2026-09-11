@@ -28,6 +28,22 @@ final class SongLibraryStore: ObservableObject {
 
     private init() {
         load()
+        failStuckImports()
+    }
+
+    /// A song can be left in `.importing`/`.processing` forever if the app was
+    /// suspended or killed mid-pipeline (e.g. the screen locked, or the user
+    /// backgrounded the app, during the tens of seconds a long song takes to process)
+    /// — there's no way to resume a half-finished import, so mark these failed on next
+    /// launch instead of leaving them stuck showing "채보 생성 중..." forever.
+    private func failStuckImports() {
+        var changed = false
+        for index in songs.indices where songs[index].status == .importing || songs[index].status == .processing {
+            songs[index].status = .failed
+            songs[index].errorMessage = "이전 시도가 중간에 중단됐어요 (화면이 잠기거나 앱이 백그라운드로 전환되면 처리가 멈출 수 있어요)."
+            changed = true
+        }
+        if changed { save() }
     }
 
     // MARK: - Paths
@@ -95,7 +111,7 @@ final class SongLibraryStore: ObservableObject {
         var song = Song(
             id: id, title: title, originalFileName: sourceURL.lastPathComponent,
             duration: 0, status: .importing, availableInstruments: [], isFavorite: false,
-            createdAt: Date()
+            createdAt: Date(), errorMessage: nil
         )
         let dir = songDirectory(for: song)
         try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -125,9 +141,10 @@ final class SongLibraryStore: ObservableObject {
         save()
     }
 
-    func markFailed(_ songID: UUID) {
+    func markFailed(_ songID: UUID, reason: String? = nil) {
         guard let index = songs.firstIndex(where: { $0.id == songID }) else { return }
         songs[index].status = .failed
+        songs[index].errorMessage = reason
         save()
     }
 }

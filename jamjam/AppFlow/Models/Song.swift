@@ -24,6 +24,11 @@ struct Song: Identifiable, Hashable, Codable {
     var availableInstruments: [Instrument]
     var isFavorite: Bool
     var createdAt: Date
+    /// Set only when `status == .failed` — the actual thrown error (or, for a song found
+    /// stuck in `.importing`/`.processing` at app launch, a note that the previous
+    /// session was interrupted) so a future failure is diagnosable without needing a
+    /// live console attached.
+    var errorMessage: String?
 
     var formattedDuration: String {
         let total = Int(duration.rounded())

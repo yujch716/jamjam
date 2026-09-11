@@ -73,6 +73,9 @@ struct SongListView: View {
                 Text("보통 곡 하나당 20초~1분 정도 걸려요")
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.5))
+                Text("처리 중에는 화면을 끄거나 앱을 나가지 마세요")
+                    .font(.caption)
+                    .foregroundStyle(.orange.opacity(0.8))
             }
             .padding(28)
             .background(Color.white.opacity(0.08))
@@ -123,9 +126,10 @@ struct SongListView: View {
                 .font(.caption)
                 .foregroundStyle(.cyan.opacity(0.8))
         case .failed:
-            Text("생성 실패")
+            Text(song.errorMessage.map { "생성 실패: \($0)" } ?? "생성 실패")
                 .font(.caption)
                 .foregroundStyle(.red.opacity(0.8))
+                .lineLimit(2)
         }
     }
 
@@ -160,6 +164,26 @@ struct SongListView: View {
         importProgress = 0
         importStatusText = "시작하는 중..."
         library.updateStatus(song.id, to: .processing)
+
+        // A long song's pipeline can take a minute or more. Two independent protections
+        // against it getting silently interrupted mid-way (which is what left a song
+        // stuck in "처리 중" forever, or produced an unexplained failure, before this
+        // was added): keep the screen from auto-locking while the app is in the
+        // foreground, and hold a background-task assertion for the (much less reliable,
+        // only ~30s of grace) case the user backgrounds the app anyway.
+        UIApplication.shared.isIdleTimerDisabled = true
+        var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
+        backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "ChartGeneration") {
+            UIApplication.shared.endBackgroundTask(backgroundTaskID)
+            backgroundTaskID = .invalid
+        }
+        func endProtections() {
+            UIApplication.shared.isIdleTimerDisabled = false
+            if backgroundTaskID != .invalid {
+                UIApplication.shared.endBackgroundTask(backgroundTaskID)
+                backgroundTaskID = .invalid
+            }
+        }
 
         let localFileURL = library.originalFileURL(for: song)
         let stemsDir = library.stemsDirectory(for: song)
