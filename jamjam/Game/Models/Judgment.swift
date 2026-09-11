@@ -39,7 +39,10 @@ enum Judgment: CaseIterable, Hashable {
         (.bad, 150)
     ]
 
-    /// Timing window used to decide whether a hold-note release landed cleanly.
+    /// How early (before a hold note's nominal end) a release still counts as "held all the
+    /// way through" rather than a premature release — a lower bound only. Once past this
+    /// point, the release itself is never timed: any release from here onward, however late,
+    /// resolves as a full success (see `RhythmScene.releaseTouch`/`advanceHoldingUnits`).
     static let holdReleaseWindowMs: Double = 100
 
     /// A hold note is scored in fixed-size time slices ("units") rather than as one lump

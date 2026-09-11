@@ -254,13 +254,15 @@ final class RhythmScene: SKScene {
 
         guard note.nextUnitIndex == note.unitCount - 1, let endTime = note.endTime else { return }
         if elapsed - endTime > Judgment.holdReleaseWindowMs / 1000 + autoResolveGraceBuffer {
-            // Held all the way through but no touchesEnded ever arrived: the release unit
-            // becomes a late/abandoned finish. The grace buffer gives a genuinely-on-time
-            // touchesEnded room to arrive and be honored on its own accurate timestamp before
-            // this safety net fires.
-            debugLog("auto-resolved abandoned hold's release unit as BAD (note \(note.runtime.id))")
-            recordUnit(.bad, showPopup: true)
-            finalizeNote(note, lastJudgment: .bad)
+            // Held all the way through but no touchesEnded ever arrived — the touch was
+            // present for the entire required duration, so this still counts as a full
+            // success regardless of how much later the finger eventually lifts (see
+            // `releaseTouch`'s matching `heldContinuously` branch for the rationale). The
+            // grace buffer gives a genuinely-on-time touchesEnded room to arrive and be
+            // honored on its own accurate timestamp before this safety net fires.
+            debugLog("auto-resolved abandoned hold's release unit as PERFECT (note \(note.runtime.id) — held past the end without ever releasing)")
+            recordUnit(.perfect, showPopup: true)
+            finalizeNote(note, lastJudgment: .perfect)
         }
     }
 
@@ -474,16 +476,17 @@ final class RhythmScene: SKScene {
         guard let startTime = songStartTime, let endTime = note.endTime else { return }
         let elapsed = touch.timestamp - startTime
 
-        // touchesCancelled is treated identically to touchesEnded — the outcome is purely a
-        // function of when the release happened relative to the hold's end window.
+        // touchesCancelled is treated identically to touchesEnded. `Judgment.holdReleaseWindowMs`
+        // before the note's end only sets the *early-release cutoff* below — once the touch has
+        // made it that far, the release itself is never timed: the player only had to keep
+        // touching through the note, not lift at a precise instant, so any release from here
+        // onward (however late) is a full success.
         let heldContinuously = elapsed >= endTime - Judgment.holdReleaseWindowMs / 1000
 
         if heldContinuously {
-            let releaseOffsetMs = (elapsed - endTime) * 1000
-            let finalJudgment = resolveHoldReleaseUnit(releaseOffsetMs: releaseOffsetMs)
-            debugLog("hold RELEASED note=\(note.runtime.id) releaseOffsetMs=\(String(format: "%.1f", releaseOffsetMs)) -> \(finalJudgment.label)")
-            recordUnit(finalJudgment, showPopup: true)
-            finalizeNote(note, lastJudgment: finalJudgment)
+            debugLog("hold RELEASED note=\(note.runtime.id) held continuously through the end -> PERFECT")
+            recordUnit(.perfect, showPopup: true)
+            finalizeNote(note, lastJudgment: .perfect)
         } else {
             // Premature release: every not-yet-scored unit from here through the last one
             // becomes its own Miss — not one flat penalty for the whole note — so releasing
