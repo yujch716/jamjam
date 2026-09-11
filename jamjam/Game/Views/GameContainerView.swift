@@ -53,6 +53,14 @@ struct GameContainerView: View {
         }
         .navigationBarHidden(true)
         .ignoresSafeArea()
+        .onChange(of: gameState.result) { _, newResult in
+            guard let newResult else { return }
+            SongLibraryStore.shared.recordBestResult(
+                song.id, playerCount: 1, score: newResult.score,
+                maxPossibleScore: newResult.maxPossibleScore,
+                achievementPercent: newResult.achievementPercent, grade: newResult.grade
+            )
+        }
     }
 
     private func pause() {

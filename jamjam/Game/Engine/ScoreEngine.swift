@@ -1,6 +1,6 @@
 import Foundation
 
-enum Grade: String, Equatable {
+enum Grade: String, Equatable, Hashable, Codable {
     case sss = "SSS"
     case ss = "SS"
     case s = "S"

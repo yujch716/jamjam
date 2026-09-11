@@ -3,6 +3,22 @@ import UniformTypeIdentifiers
 import AVFoundation
 import UIKit
 
+/// Compact grade badge shown next to a song's title once it's been played at least once.
+private struct GradeBadge: View {
+    let grade: Grade
+
+    var body: some View {
+        Text(grade.rawValue)
+            .font(.caption2.weight(.heavy))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.yellow.opacity(0.15))
+            .foregroundStyle(.yellow)
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(Color.yellow.opacity(0.5), lineWidth: 1))
+    }
+}
+
 struct SongListView: View {
     @EnvironmentObject private var router: AppRouter
     @StateObject private var library = SongLibraryStore.shared
@@ -172,10 +188,15 @@ struct SongListView: View {
             } label: {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(song.title)
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
+                        HStack(spacing: 6) {
+                            Text(song.title)
+                                .font(.headline)
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                            if let grade = song.bestOverallGrade {
+                                GradeBadge(grade: grade)
+                            }
+                        }
                         statusLabel(for: song)
                     }
                     Spacer()

@@ -3,11 +3,18 @@ import SwiftUI
 struct PlayerSetupView: View {
     let song: Song
     @EnvironmentObject private var router: AppRouter
+    @StateObject private var library = SongLibraryStore.shared
 
     @State private var playerCount = 1
     @State private var selectedInstruments: [Instrument] = []
 
     private let playerCountOptions = [1, 2, 4]
+
+    /// Re-reads from the live store rather than trusting the `song` snapshot passed in at
+    /// navigation time, so a best score just recorded this session is reflected immediately.
+    private var currentSong: Song {
+        library.songs.first(where: { $0.id == song.id }) ?? song
+    }
 
     var body: some View {
         ZStack {
@@ -30,6 +37,8 @@ struct PlayerSetupView: View {
                         playerCountButton(count)
                     }
                 }
+
+                bestScoresSection
 
                 VStack(spacing: 12) {
                     ForEach(0..<playerCount, id: \.self) { slot in
@@ -75,6 +84,47 @@ struct PlayerSetupView: View {
         if selectedInstruments.count > playerCount {
             selectedInstruments.removeLast(selectedInstruments.count - playerCount)
         }
+    }
+
+    /// Shows this song's best-ever "종합 점수/등급" for each player count, entirely
+    /// independent per count — "기록 없음" for a mode never played yet.
+    private var bestScoresSection: some View {
+        HStack(spacing: 10) {
+            ForEach(playerCountOptions, id: \.self) { count in
+                bestScoreCard(count)
+            }
+        }
+        .padding(.horizontal)
+    }
+
+    private func bestScoreCard(_ count: Int) -> some View {
+        let best = currentSong.bestResults?[count]
+        return VStack(spacing: 4) {
+            Text("\(count)인 최고")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.white.opacity(0.5))
+            if let best {
+                Text(best.grade.rawValue)
+                    .font(.title3.weight(.heavy))
+                    .foregroundStyle(.yellow)
+                Text("\(best.score)점")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.6))
+            } else {
+                Text("기록 없음")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.35))
+                    .padding(.top, 6)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(Color.white.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+        )
     }
 
     private func playerCountButton(_ count: Int) -> some View {

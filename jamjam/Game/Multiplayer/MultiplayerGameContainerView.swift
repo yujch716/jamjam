@@ -62,6 +62,15 @@ struct MultiplayerGameContainerView: View {
         }
         .navigationBarHidden(true)
         .ignoresSafeArea()
+        .onChange(of: orchestrator.allFinished) { _, finished in
+            guard finished else { return }
+            let combined = orchestrator.combinedResult
+            SongLibraryStore.shared.recordBestResult(
+                song.id, playerCount: instruments.count, score: combined.score,
+                maxPossibleScore: combined.maxPossibleScore,
+                achievementPercent: combined.achievementPercent, grade: combined.grade
+            )
+        }
     }
 
     private func pause() {

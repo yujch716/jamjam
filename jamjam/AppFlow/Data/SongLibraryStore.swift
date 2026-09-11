@@ -163,4 +163,27 @@ final class SongLibraryStore: ObservableObject {
         songs[index].errorMessage = reason
         save()
     }
+
+    /// Records a just-finished play's combined score/grade for `playerCount` (1/2/4),
+    /// keeping only the highest-`score` result ever seen for that player count — entirely
+    /// independent of every other player count, and never overwritten by a lower score.
+    /// Returns whether this result actually became the new best (false if an existing
+    /// record was already equal or higher, in which case nothing changed).
+    @discardableResult
+    func recordBestResult(
+        _ songID: UUID, playerCount: Int,
+        score: Int, maxPossibleScore: Int, achievementPercent: Double, grade: Grade
+    ) -> Bool {
+        guard let index = songs.firstIndex(where: { $0.id == songID }) else { return false }
+        if let existing = songs[index].bestResults?[playerCount], existing.score >= score {
+            return false
+        }
+        let candidate = BestResult(score: score, maxPossibleScore: maxPossibleScore,
+                                    achievementPercent: achievementPercent, grade: grade)
+        var results = songs[index].bestResults ?? [:]
+        results[playerCount] = candidate
+        songs[index].bestResults = results
+        save()
+        return true
+    }
 }
