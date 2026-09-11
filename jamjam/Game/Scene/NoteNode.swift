@@ -13,9 +13,8 @@ final class NoteNode: SKNode {
     private var tail: SKShapeNode?
     private let tailWidth: CGFloat
 
-    init(activeNote: ActiveNote, noteWidth: CGFloat, noteHeight: CGFloat, tailLength: CGFloat) {
+    init(activeNote: ActiveNote, noteWidth: CGFloat, noteHeight: CGFloat, tailLength: CGFloat, color: SKColor) {
         self.activeNote = activeNote
-        let color = activeNote.lane.uiColor
 
         // Pill/stadium shape: corner radius = height / 2 fully rounds the short ends.
         let height = noteHeight

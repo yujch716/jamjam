@@ -5,15 +5,16 @@ enum ChartLoaderError: Error {
 }
 
 enum ChartLoader {
-    /// Decodes a chart JSON matching the exact `{time, type, duration?}` schema, sorts by
-    /// time, and assigns each note a lane deterministically (index % lane count). Lane
-    /// assignment is never written back into the JSON — the schema stays compliant for
-    /// future AI-generated charts, which will need their own lane-assignment design.
+    /// Decodes a chart JSON matching the `{time, type, duration?, lane?}` schema, sorts by
+    /// time, and resolves each note's `Lane` from its `lane` field (assigned once at
+    /// generation time by `LaneAssigner`). Falls back to index % lane count only for charts
+    /// predating lane assignment (the legacy `dummy_chart.json`).
     static func loadRuntimeNotes(from data: Data, laneCount: Int = Lane.allCases.count) throws -> [RuntimeNote] {
         let notes = try JSONDecoder().decode([ChartNote].self, from: data)
         let sorted = notes.sorted { $0.time < $1.time }
         return sorted.enumerated().map { index, note in
-            let lane = Lane(rawValue: index % laneCount) ?? .guitar
+            let laneIndex = note.lane ?? (index % laneCount)
+            let lane = Lane(rawValue: laneIndex) ?? .lane0
             return RuntimeNote(id: UUID(), chartNote: note, lane: lane)
         }
     }

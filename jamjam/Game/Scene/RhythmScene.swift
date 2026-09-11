@@ -50,14 +50,19 @@ final class RhythmScene: SKScene {
     /// show up unambiguously as a touch/score event logged under the WRONG window's tag.
     private let windowLabel: String
 
+    /// This window's uniform note/lane color — one color for the whole window (not one per
+    /// lane), keyed by player index rather than instrument. See `PlayerPalette`.
+    private let windowColor: SKColor
+
     init(size: CGSize, runtimeNotes: [RuntimeNote], gameState: GameState, windowLabel: String = "",
-         audioPlayer: AudioPlaybackController? = nil) {
+         audioPlayer: AudioPlaybackController? = nil, windowColor: SKColor = PlayerPalette.uiColor(forPlayerIndex: 0)) {
         self.allNotes = runtimeNotes.map { ActiveNote(runtime: $0) }
         let totalUnits = runtimeNotes.reduce(0) { $0 + $1.unitCount }
         self.scoreEngine = ScoreEngine(totalUnits: totalUnits)
         self.gameState = gameState
         self.windowLabel = windowLabel
         self.audioPlayer = audioPlayer
+        self.windowColor = windowColor
         super.init(size: size)
         scaleMode = .resizeFill
     }
@@ -116,7 +121,7 @@ final class RhythmScene: SKScene {
                 x: LaneLayout.laneCenterX(lane: lane, sceneWidth: size.width),
                 y: LaneLayout.judgmentLineY(sceneHeight: size.height)
             )
-            node.fillColor = lane.uiColor
+            node.fillColor = windowColor
             node.strokeColor = .clear
             node.alpha = 0
             node.zPosition = -0.7
@@ -182,7 +187,7 @@ final class RhythmScene: SKScene {
         }
         let noteWidth = LaneLayout.noteWidth(sceneWidth: size.width)
         let noteHeight = LaneLayout.noteHeight(sceneHeight: size.height)
-        let node = NoteNode(activeNote: note, noteWidth: noteWidth, noteHeight: noteHeight, tailLength: tailLength)
+        let node = NoteNode(activeNote: note, noteWidth: noteWidth, noteHeight: noteHeight, tailLength: tailLength, color: windowColor)
         node.position = CGPoint(
             x: LaneLayout.laneCenterX(lane: note.lane, sceneWidth: size.width),
             y: LaneLayout.spawnY(sceneHeight: size.height)
@@ -293,7 +298,7 @@ final class RhythmScene: SKScene {
         activeSpawnedNotes.removeAll { $0 === note }
 
         if let node = note.node {
-            let burst = JudgmentEffects.particleBurst(color: note.lane.uiColor, at: node.position)
+            let burst = JudgmentEffects.particleBurst(color: windowColor, at: node.position)
             addChild(burst)
             node.run(.sequence([
                 .group([.fadeOut(withDuration: 0.15), .scale(to: 1.3, duration: 0.15)]),

@@ -1,5 +1,6 @@
 import SwiftUI
 import SpriteKit
+import UIKit
 
 /// One independent play window: its own `RhythmScene` + `GameState`, reused as-is whether
 /// it fills the whole screen (1-player) or one cell of a multiplayer grid. `chartLoader`
@@ -19,6 +20,9 @@ struct GameView: View {
     /// Builds this window's audio player (the separated instrument stem), if any — nil
     /// for the dummy-chart path, which has no backing audio file.
     var audioLoader: () -> AudioPlaybackController? = { nil }
+    /// This window's uniform note/lane color, keyed by player slot — see `PlayerPalette`.
+    /// Defaults to player-index 0 (sky blue), which is also what single-player always uses.
+    var windowColor: UIColor = PlayerPalette.uiColor(forPlayerIndex: 0)
     /// Diagnostic-only tag forwarded to `RhythmScene` (see there) — empty for the 1-player
     /// call site, distinct per slot in multiplayer.
     var windowLabel: String = ""
@@ -89,7 +93,7 @@ struct GameView: View {
             let notes = try chartLoader()
             let audioPlayer = audioLoader()
             scene = RhythmScene(size: size, runtimeNotes: notes, gameState: gameState, windowLabel: windowLabel,
-                                 audioPlayer: audioPlayer)
+                                 audioPlayer: audioPlayer, windowColor: windowColor)
         } catch {
             loadErrorMessage = error.localizedDescription
         }

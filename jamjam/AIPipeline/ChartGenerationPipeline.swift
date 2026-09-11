@@ -87,11 +87,12 @@ enum ChartGenerationPipeline {
             let peakFrames = PeakPicking.pickPeaks(probs, threshold: onsetThreshold, minSeparationFrames: minSepFrames)
             let onsetTimes = peakFrames.map { Double($0) / frameRate }
 
-            let notes = NoteClassifier.classifyNotes(
+            let rawNotes = NoteClassifier.classifyNotes(
                 y: mono22k, sampleRate: MelSpectrogram.sampleRate, onsetTimes: onsetTimes,
                 hopLength: MelSpectrogram.hopLength
             )
-            charts[instrument] = notes
+            var rng = SystemRandomNumberGenerator()
+            charts[instrument] = LaneAssigner.assign(rawNotes, rng: &rng)
         }
 
         progress("완료", 1.0)

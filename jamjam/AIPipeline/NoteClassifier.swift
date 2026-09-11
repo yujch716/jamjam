@@ -48,20 +48,30 @@ enum NoteClassifier {
         return rms.map { $0 < threshold }
     }
 
+    /// A classified note before lane assignment — `intensity` (the local RMS peak used to
+    /// decide tap/hold) doubles as an onset-strength proxy for `LaneAssigner`'s simultaneous
+    /// 2-note promotion, matching `note_classification.py`'s `_intensity` field.
+    struct RawClassifiedNote {
+        let time: Double
+        let type: NoteType
+        let duration: Double?
+        let intensity: Float
+    }
+
     /// For each onset time, measures how long the RMS envelope stays above a
-    /// per-note-relative threshold (a fraction of that note's own peak level shortly after
-    /// onset) to decide tap vs. hold, with hold `duration` capped at whichever comes first:
-    /// the envelope decaying, or the next onset starting.
+    /// per-note-relative threshold (a fraction of that note's own peak level shortly
+    /// after onset) to decide tap vs. hold, with hold `duration` capped at whichever
+    /// comes first: the envelope decaying, or the next onset starting.
     static func classifyNotes(
         y: [Float], sampleRate: Int, onsetTimes: [Double], hopLength: Int,
         holdMinDuration: Double = 0.2, sustainRatio: Float = 0.2, frameLength: Int = 2048
-    ) -> [ChartNote] {
+    ) -> [RawClassifiedNote] {
         let rms = computeRMS(y, frameLength: frameLength, hopLength: hopLength)
         let nFrames = rms.count
         let frameRate = Double(sampleRate) / Double(hopLength)
         let peakSearchFrames = max(1, Int(0.05 * frameRate))
 
-        var notes: [ChartNote] = []
+        var notes: [RawClassifiedNote] = []
         for (idx, t) in onsetTimes.enumerated() {
             let onsetFrame = Int((t * frameRate).rounded())
             if onsetFrame >= nFrames { continue }
@@ -80,11 +90,11 @@ enum NoteClassifier {
             let sustainSeconds = Double(f - onsetFrame) / frameRate
 
             if sustainSeconds < holdMinDuration {
-                notes.append(ChartNote(time: t, type: .tap, duration: nil))
+                notes.append(RawClassifiedNote(time: t, type: .tap, duration: nil, intensity: localPeak))
             } else {
                 let endFrame = min(f, nextOnsetFrame)
                 let duration = Double(endFrame - onsetFrame) / frameRate
-                notes.append(ChartNote(time: t, type: .hold, duration: duration))
+                notes.append(RawClassifiedNote(time: t, type: .hold, duration: duration, intensity: localPeak))
             }
         }
         return notes

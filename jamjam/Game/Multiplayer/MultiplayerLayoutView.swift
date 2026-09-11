@@ -72,6 +72,7 @@ struct MultiplayerLayoutView: View {
                 return try ChartLoader.loadRuntimeNotes(fromFileURL: SongLibraryStore.shared.chartURL(for: song, instrument: instrument))
             },
             audioLoader: { sharedAudioPlayer },
+            windowColor: PlayerPalette.uiColor(forPlayerIndex: index),
             windowLabel: label,
             onPauseTapped: index == 0 ? onPauseTapped : nil
         )
