@@ -298,7 +298,10 @@ final class RhythmScene: SKScene {
         activeSpawnedNotes.removeAll { $0 === note }
 
         if let node = note.node {
-            let burst = JudgmentEffects.particleBurst(color: windowColor, at: node.position)
+            let burst = JudgmentEffects.particleBurst(
+                color: windowColor, at: node.position,
+                comboIntensity: ComboIntensity.level(for: scoreEngine.combo)
+            )
             addChild(burst)
             node.run(.sequence([
                 .group([.fadeOut(withDuration: 0.15), .scale(to: 1.3, duration: 0.15)]),

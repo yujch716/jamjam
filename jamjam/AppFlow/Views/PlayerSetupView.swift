@@ -18,7 +18,7 @@ struct PlayerSetupView: View {
 
     var body: some View {
         ZStack {
-            Color(red: 0.04, green: 0.05, blue: 0.10)
+            NeonTheme.background
                 .ignoresSafeArea()
 
             VStack(spacing: 28) {
@@ -26,6 +26,7 @@ struct PlayerSetupView: View {
                     Text(song.title)
                         .font(.title.weight(.heavy))
                         .foregroundStyle(.white)
+                        .shadow(color: NeonTheme.accent.opacity(0.6), radius: 10)
                     Text(song.formattedDuration)
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.6))
@@ -56,14 +57,10 @@ struct PlayerSetupView: View {
                         .font(.headline.weight(.bold))
                         .frame(maxWidth: 240)
                         .padding()
-                        .background(Color.cyan.opacity(0.2))
-                        .foregroundStyle(.cyan)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(Color.cyan, lineWidth: 1)
-                        )
+                        .neonCard()
+                        .foregroundStyle(NeonTheme.accent)
                 }
+                .buttonStyle(NeonButtonStyle())
                 .padding(.bottom, 24)
             }
         }
@@ -107,6 +104,7 @@ struct PlayerSetupView: View {
                 Text(best.grade.rawValue)
                     .font(.title3.weight(.heavy))
                     .foregroundStyle(.yellow)
+                    .shadow(color: .yellow.opacity(0.6), radius: 5)
                 Text("\(best.score)점")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.6))
@@ -119,12 +117,7 @@ struct PlayerSetupView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
-        .background(Color.white.opacity(0.06))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.15), lineWidth: 1)
-        )
+        .neonCard(tint: best != nil ? .yellow : .white.opacity(0.3), cornerRadius: 12)
     }
 
     private func playerCountButton(_ count: Int) -> some View {
@@ -135,18 +128,21 @@ struct PlayerSetupView: View {
             Text("\(count)인")
                 .font(.headline.weight(.bold))
                 .frame(width: 72, height: 44)
-                .background(isSelected ? Color.cyan.opacity(0.25) : Color.white.opacity(0.06))
-                .foregroundStyle(isSelected ? .cyan : Color.white.opacity(0.7))
+                .background(isSelected ? NeonTheme.accent.opacity(0.25) : Color.white.opacity(0.06))
+                .foregroundStyle(isSelected ? NeonTheme.accent : Color.white.opacity(0.7))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(isSelected ? Color.cyan : Color.white.opacity(0.2), lineWidth: 1)
+                        .stroke(isSelected ? NeonTheme.accent : Color.white.opacity(0.2), lineWidth: 1)
                 )
+                .shadow(color: isSelected ? NeonTheme.accent.opacity(0.6) : .clear, radius: 8)
         }
+        .buttonStyle(NeonButtonStyle())
     }
 
     private func instrumentSlot(index: Int) -> some View {
         let selected = selectedInstruments.indices.contains(index) ? selectedInstruments[index] : nil
+        let tint = selected?.neonColor ?? .white
         return Menu {
             ForEach(song.availableInstruments, id: \.self) { instrument in
                 Button(instrument.label) {
@@ -162,15 +158,11 @@ struct PlayerSetupView: View {
                 Spacer()
                 Text(selected?.label ?? "악기 선택")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(selected?.neonColor ?? .white)
+                    .foregroundStyle(tint)
             }
             .padding()
-            .background(Color.white.opacity(0.06))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke((selected?.neonColor ?? .white).opacity(0.6), lineWidth: 1)
-            )
+            .neonCard(tint: selected != nil ? tint : .white.opacity(0.35), cornerRadius: 12)
         }
+        .buttonStyle(NeonButtonStyle())
     }
 }

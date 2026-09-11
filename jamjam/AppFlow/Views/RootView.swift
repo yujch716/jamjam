@@ -26,6 +26,6 @@ struct RootView: View {
         }
         .environmentObject(router)
         .preferredColorScheme(.dark)
-        .tint(.cyan)
+        .tint(NeonTheme.accent)
     }
 }

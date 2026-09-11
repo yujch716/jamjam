@@ -39,6 +39,7 @@ struct GameView: View {
         GeometryReader { geometry in
             ZStack {
                 Color(red: 0.04, green: 0.05, blue: 0.10)
+                ComboGlowView(combo: gameState.combo, color: Color(windowColor))
                 if let scene {
                     SpriteView(scene: scene)
                 }

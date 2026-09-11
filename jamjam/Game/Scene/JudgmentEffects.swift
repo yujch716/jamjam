@@ -1,8 +1,7 @@
 import SpriteKit
 
-/// Minimal, functional-first-pass VFX: a small programmatic particle burst on judgment and a
-/// brief pulse on the judgment line. No .sks files, no combo-scaling glow yet (out of scope
-/// for this pass per CLAUDE.md's "keep it simple" first-cut instruction).
+/// Programmatic particle burst on judgment, plus a brief pulse on the judgment line. No
+/// .sks files — everything's generated in code.
 enum JudgmentEffects {
     /// A small soft-circle texture generated procedurally so the particle burst doesn't
     /// depend on a bundled image asset.
@@ -23,15 +22,19 @@ enum JudgmentEffects {
         return SKTexture(image: image)
     }()
 
-    static func particleBurst(color: UIColor, at position: CGPoint) -> SKEmitterNode {
+    /// `comboIntensity` (0...1, see `ComboIntensity`) modestly scales particle count/speed —
+    /// deliberately a small bump (max +8 particles), not a multiplier, so a 4-player screen
+    /// with all four windows simultaneously at max combo never spawns enough particles at
+    /// once to risk a frame drop.
+    static func particleBurst(color: UIColor, at position: CGPoint, comboIntensity: Double = 0) -> SKEmitterNode {
         let emitter = SKEmitterNode()
         emitter.position = position
         emitter.particleColor = color
         emitter.particleColorBlendFactor = 1.0
         emitter.particleBirthRate = 400
-        emitter.numParticlesToEmit = 14
+        emitter.numParticlesToEmit = 14 + Int(8 * comboIntensity)
         emitter.particleLifetime = 0.35
-        emitter.particleSpeed = 90
+        emitter.particleSpeed = 90 + 30 * CGFloat(comboIntensity)
         emitter.particleSpeedRange = 50
         emitter.particleAlpha = 0.9
         emitter.particleAlphaSpeed = -2.4

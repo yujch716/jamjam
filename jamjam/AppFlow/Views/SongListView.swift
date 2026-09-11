@@ -4,6 +4,8 @@ import AVFoundation
 import UIKit
 
 /// Compact grade badge shown next to a song's title once it's been played at least once.
+/// Gold rather than the screen's accent color — reads as "achievement," distinct from the
+/// neutral sky-blue chrome around it.
 private struct GradeBadge: View {
     let grade: Grade
 
@@ -15,7 +17,8 @@ private struct GradeBadge: View {
             .background(Color.yellow.opacity(0.15))
             .foregroundStyle(.yellow)
             .clipShape(Capsule())
-            .overlay(Capsule().stroke(Color.yellow.opacity(0.5), lineWidth: 1))
+            .overlay(Capsule().stroke(Color.yellow.opacity(0.6), lineWidth: 1))
+            .shadow(color: .yellow.opacity(0.5), radius: 4)
     }
 }
 
@@ -44,7 +47,7 @@ struct SongListView: View {
 
     var body: some View {
         ZStack {
-            Color(red: 0.04, green: 0.05, blue: 0.10)
+            NeonTheme.background
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -53,6 +56,7 @@ struct SongListView: View {
                     Text("⭐ 즐겨찾기").tag(FilterMode.favoritesOnly)
                 }
                 .pickerStyle(.segmented)
+                .tint(NeonTheme.accent)
                 .padding(.horizontal)
                 .padding(.top, 8)
 
@@ -85,6 +89,7 @@ struct SongListView: View {
                         }
                     }
                 }
+                .listRowSpacing(8)
                 .scrollContentBackground(.hidden)
             }
 
@@ -99,7 +104,10 @@ struct SongListView: View {
                     showFilePicker = true
                 } label: {
                     Image(systemName: "plus.circle.fill")
+                        .foregroundStyle(NeonTheme.accent)
+                        .shadow(color: NeonTheme.accent.opacity(0.7), radius: 6)
                 }
+                .buttonStyle(NeonButtonStyle())
                 .disabled(isImporting)
             }
         }
@@ -127,7 +135,15 @@ struct SongListView: View {
     private func songRows(_ songs: [Song]) -> some View {
         ForEach(songs) { song in
             songRow(song)
-                .listRowBackground(Color.white.opacity(0.05))
+                .listRowBackground(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.white.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(NeonTheme.accent.opacity(0.22), lineWidth: 1)
+                        )
+                )
+                .listRowSeparator(.hidden)
                 .swipeActions {
                     Button(role: .destructive) {
                         pendingDeleteSong = song
@@ -152,9 +168,9 @@ struct SongListView: View {
             VStack(spacing: 20) {
                 ProgressView(value: importProgress)
                     .frame(width: 240)
-                    .tint(.cyan)
+                    .tint(NeonTheme.accent)
                 Text(importStatusText)
-                    .font(.subheadline)
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.85))
                 Text("보통 곡 하나당 20초~1분 정도 걸려요")
                     .font(.caption)
@@ -164,8 +180,7 @@ struct SongListView: View {
                     .foregroundStyle(.orange.opacity(0.8))
             }
             .padding(28)
-            .background(Color.white.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .neonCard(cornerRadius: 20)
         }
     }
 
@@ -180,8 +195,9 @@ struct SongListView: View {
             } label: {
                 Image(systemName: song.isFavorite ? "star.fill" : "star")
                     .foregroundStyle(song.isFavorite ? .yellow : .white.opacity(0.35))
+                    .shadow(color: song.isFavorite ? .yellow.opacity(0.7) : .clear, radius: 5)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(NeonButtonStyle())
 
             Button {
                 router.push(.playerSetup(song))
@@ -202,21 +218,21 @@ struct SongListView: View {
                     Spacer()
                     if song.status == .ready {
                         Image(systemName: "chevron.right")
-                            .foregroundStyle(.white.opacity(0.3))
+                            .foregroundStyle(NeonTheme.accent.opacity(0.7))
                     }
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(NeonButtonStyle())
             .disabled(song.status != .ready)
 
             Button(role: .destructive) {
                 pendingDeleteSong = song
             } label: {
                 Image(systemName: "trash")
-                    .foregroundStyle(.red.opacity(0.75))
+                    .foregroundStyle(.red.opacity(0.8))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(NeonButtonStyle())
         }
     }
 
@@ -230,7 +246,7 @@ struct SongListView: View {
         case .importing, .processing:
             Text("채보 생성 중...")
                 .font(.caption)
-                .foregroundStyle(.cyan.opacity(0.8))
+                .foregroundStyle(NeonTheme.accent.opacity(0.9))
         case .failed:
             Text(song.errorMessage.map { "생성 실패: \($0)" } ?? "생성 실패")
                 .font(.caption)
