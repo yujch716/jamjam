@@ -25,4 +25,11 @@ enum ChartLoader {
         let data = try Data(contentsOf: url)
         return try loadRuntimeNotes(from: data)
     }
+
+    /// Loads an AI-generated chart previously written by `ChartGenerationPipeline` +
+    /// `SongLibraryStore` for a specific song/instrument.
+    static func loadRuntimeNotes(fromFileURL url: URL, laneCount: Int = Lane.allCases.count) throws -> [RuntimeNote] {
+        let data = try Data(contentsOf: url)
+        return try loadRuntimeNotes(from: data, laneCount: laneCount)
+    }
 }

@@ -13,12 +13,29 @@ import SwiftUI
 /// away from center toward their own near edge. `RhythmScene` itself has no concept of
 /// orientation; the rotation is purely a SwiftUI transform on top of the same reusable window.
 struct MultiplayerLayoutView: View {
+    let song: Song
     let gameStates: [GameState]
     let instruments: [Instrument]
     /// Wired only into Player 1's window (index 0) — see `PauseButton`'s doc comment for why
     /// the menu button lives inside one specific window's own HUD rather than floating at a
     /// fixed screen position shared by all of them.
     var onPauseTapped: (() -> Void)? = nil
+
+    /// One shared player for the whole session, not one per window — every window plays
+    /// the same original mixed song (never the separated stems, which exist only to
+    /// generate each window's chart), so N independent players would just be N
+    /// out-of-phase copies of the same audio playing over each other. `play()`/`pause()`/
+    /// `resume()` are all idempotent, so each window calling them independently (via its
+    /// own `RhythmScene`) on this one shared instance is harmless.
+    private let sharedAudioPlayer: AudioPlaybackController?
+
+    init(song: Song, gameStates: [GameState], instruments: [Instrument], onPauseTapped: (() -> Void)? = nil) {
+        self.song = song
+        self.gameStates = gameStates
+        self.instruments = instruments
+        self.onPauseTapped = onPauseTapped
+        self.sharedAudioPlayer = AudioPlaybackController(fileURL: SongLibraryStore.shared.originalFileURL(for: song))
+    }
 
     var body: some View {
         switch gameStates.count {
@@ -46,9 +63,15 @@ struct MultiplayerLayoutView: View {
     }
 
     private func window(_ index: Int, label: String) -> some View {
-        GameView(
+        let instrument = instruments.indices.contains(index) ? instruments[index] : nil
+        return GameView(
             gameState: gameStates.indices.contains(index) ? gameStates[index] : GameState(),
-            instrument: instruments.indices.contains(index) ? instruments[index] : nil,
+            instrument: instrument,
+            chartLoader: {
+                guard let instrument else { throw ChartLoaderError.resourceNotFound }
+                return try ChartLoader.loadRuntimeNotes(fromFileURL: SongLibraryStore.shared.chartURL(for: song, instrument: instrument))
+            },
+            audioLoader: { sharedAudioPlayer },
             windowLabel: label,
             onPauseTapped: index == 0 ? onPauseTapped : nil
         )

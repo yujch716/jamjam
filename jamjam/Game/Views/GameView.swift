@@ -16,6 +16,9 @@ struct GameView: View {
     /// multiplayer grid of otherwise-identical windows can be told apart at a glance.
     var instrument: Instrument? = nil
     var chartLoader: () throws -> [RuntimeNote] = ChartLoader.loadDummyChart
+    /// Builds this window's audio player (the separated instrument stem), if any — nil
+    /// for the dummy-chart path, which has no backing audio file.
+    var audioLoader: () -> AudioPlaybackController? = { nil }
     /// Diagnostic-only tag forwarded to `RhythmScene` (see there) — empty for the 1-player
     /// call site, distinct per slot in multiplayer.
     var windowLabel: String = ""
@@ -84,7 +87,9 @@ struct GameView: View {
     private func setUpScene(size: CGSize) {
         do {
             let notes = try chartLoader()
-            scene = RhythmScene(size: size, runtimeNotes: notes, gameState: gameState, windowLabel: windowLabel)
+            let audioPlayer = audioLoader()
+            scene = RhythmScene(size: size, runtimeNotes: notes, gameState: gameState, windowLabel: windowLabel,
+                                 audioPlayer: audioPlayer)
         } catch {
             loadErrorMessage = error.localizedDescription
         }

@@ -4,7 +4,7 @@ import Combine
 enum Route: Hashable {
     case songList
     case playerSetup(Song)
-    case game(instruments: [Instrument])
+    case game(song: Song, instruments: [Instrument])
 }
 
 /// Single source of truth for the navigation stack, shared via environment so any screen

@@ -15,11 +15,11 @@ struct RootView: View {
                         SongListView()
                     case .playerSetup(let song):
                         PlayerSetupView(song: song)
-                    case .game(let instruments):
+                    case .game(let song, let instruments):
                         if instruments.count <= 1 {
-                            GameContainerView(instrument: instruments.first ?? .guitar)
+                            GameContainerView(song: song, instrument: instruments.first ?? .guitar)
                         } else {
-                            MultiplayerGameContainerView(instruments: instruments)
+                            MultiplayerGameContainerView(song: song, instruments: instruments)
                         }
                     }
                 }

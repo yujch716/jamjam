@@ -39,18 +39,25 @@ final class RhythmScene: SKScene {
     let scoreEngine: ScoreEngine
     weak var gameState: GameState?
 
+    /// Non-nil only when playing a real generated chart (the dummy-chart path has no
+    /// audio file at all) — started from `didMove(to:)` and paused/resumed in lockstep
+    /// with the scene's own timeline in `setPaused(_:)`.
+    private let audioPlayer: AudioPlaybackController?
+
     /// Diagnostic-only tag identifying which window this scene belongs to (e.g. "P1-bottom",
     /// "P2-top") — included in every debug log line so a multiplayer touch-routing bug (a
     /// touch meant for one window's SKView somehow affecting another window's scene) would
     /// show up unambiguously as a touch/score event logged under the WRONG window's tag.
     private let windowLabel: String
 
-    init(size: CGSize, runtimeNotes: [RuntimeNote], gameState: GameState, windowLabel: String = "") {
+    init(size: CGSize, runtimeNotes: [RuntimeNote], gameState: GameState, windowLabel: String = "",
+         audioPlayer: AudioPlaybackController? = nil) {
         self.allNotes = runtimeNotes.map { ActiveNote(runtime: $0) }
         let totalUnits = runtimeNotes.reduce(0) { $0 + $1.unitCount }
         self.scoreEngine = ScoreEngine(totalUnits: totalUnits)
         self.gameState = gameState
         self.windowLabel = windowLabel
+        self.audioPlayer = audioPlayer
         super.init(size: size)
         scaleMode = .resizeFill
     }
@@ -62,6 +69,7 @@ final class RhythmScene: SKScene {
     override func didMove(to view: SKView) {
         view.isMultipleTouchEnabled = true
         backgroundColor = SKColor(red: 0.04, green: 0.05, blue: 0.10, alpha: 1.0)
+        audioPlayer?.play()
         setUpLanes()
         setUpJudgmentZone()
         setUpLaneHighlights()
@@ -130,10 +138,12 @@ final class RhythmScene: SKScene {
         guard paused != isPaused else { return }
         if paused {
             pauseStartWallTime = ProcessInfo.processInfo.systemUptime
+            audioPlayer?.pause()
         } else if let pauseStart = pauseStartWallTime, let startTime = songStartTime {
             let pausedDuration = ProcessInfo.processInfo.systemUptime - pauseStart
             songStartTime = startTime + pausedDuration
             pauseStartWallTime = nil
+            audioPlayer?.resume()
         }
         isPaused = paused
     }

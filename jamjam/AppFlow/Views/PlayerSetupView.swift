@@ -41,9 +41,9 @@ struct PlayerSetupView: View {
                 Spacer()
 
                 Button {
-                    router.push(.game(instruments: selectedInstruments))
+                    router.push(.game(song: song, instruments: selectedInstruments))
                 } label: {
-                    Text("재생")
+                    Text("Start")
                         .font(.headline.weight(.bold))
                         .frame(maxWidth: 240)
                         .padding()

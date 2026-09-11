@@ -1,8 +1,17 @@
 import SwiftUI
+import UniformTypeIdentifiers
+import AVFoundation
+import UIKit
 
 struct SongListView: View {
     @EnvironmentObject private var router: AppRouter
-    @State private var songs: [Song] = DummySongLibrary.makeSongs()
+    @StateObject private var library = SongLibraryStore.shared
+
+    @State private var showFilePicker = false
+    @State private var isImporting = false
+    @State private var importStatusText = ""
+    @State private var importProgress: Double = 0
+    @State private var errorMessage: String?
 
     var body: some View {
         ZStack {
@@ -10,12 +19,12 @@ struct SongListView: View {
                 .ignoresSafeArea()
 
             List {
-                ForEach(songs) { song in
+                ForEach(library.songs) { song in
                     songRow(song)
                         .listRowBackground(Color.white.opacity(0.05))
                         .swipeActions {
                             Button(role: .destructive) {
-                                delete(song)
+                                library.delete(song)
                             } label: {
                                 Label("삭제", systemImage: "trash")
                             }
@@ -23,14 +32,58 @@ struct SongListView: View {
                 }
             }
             .scrollContentBackground(.hidden)
+
+            if isImporting {
+                importOverlay
+            }
         }
         .navigationTitle("노래 리스트")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showFilePicker = true
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                }
+                .disabled(isImporting)
+            }
+        }
+        .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.mp3], allowsMultipleSelection: false) { result in
+            handlePickerResult(result)
+        }
+        .alert("음원 등록 실패", isPresented: Binding(
+            get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("확인") { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
+    }
+
+    private var importOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.75).ignoresSafeArea()
+            VStack(spacing: 20) {
+                ProgressView(value: importProgress)
+                    .frame(width: 240)
+                    .tint(.cyan)
+                Text(importStatusText)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.85))
+                Text("보통 곡 하나당 20초~1분 정도 걸려요")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+            .padding(28)
+            .background(Color.white.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+        }
     }
 
     private func songRow(_ song: Song) -> some View {
         HStack(spacing: 12) {
             Button {
-                toggleFavorite(song)
+                library.toggleFavorite(song)
             } label: {
                 Image(systemName: song.isFavorite ? "star.fill" : "star")
                     .foregroundStyle(song.isFavorite ? .yellow : .white.opacity(0.35))
@@ -41,28 +94,112 @@ struct SongListView: View {
                 Text(song.title)
                     .font(.headline)
                     .foregroundStyle(.white)
-                Text(song.formattedDuration)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.6))
+                statusLabel(for: song)
             }
 
             Spacer()
 
-            Image(systemName: "chevron.right")
-                .foregroundStyle(.white.opacity(0.3))
+            if song.status == .ready {
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(.white.opacity(0.3))
+            }
         }
         .contentShape(Rectangle())
         .onTapGesture {
+            guard song.status == .ready else { return }
             router.push(.playerSetup(song))
         }
     }
 
-    private func toggleFavorite(_ song: Song) {
-        guard let index = songs.firstIndex(where: { $0.id == song.id }) else { return }
-        songs[index].isFavorite.toggle()
+    @ViewBuilder
+    private func statusLabel(for song: Song) -> some View {
+        switch song.status {
+        case .ready:
+            Text(song.formattedDuration)
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.6))
+        case .importing, .processing:
+            Text("채보 생성 중...")
+                .font(.caption)
+                .foregroundStyle(.cyan.opacity(0.8))
+        case .failed:
+            Text("생성 실패")
+                .font(.caption)
+                .foregroundStyle(.red.opacity(0.8))
+        }
     }
 
-    private func delete(_ song: Song) {
-        songs.removeAll { $0.id == song.id }
+    private func handlePickerResult(_ result: Result<[URL], Error>) {
+        switch result {
+        case .failure(let error):
+            errorMessage = error.localizedDescription
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            guard url.pathExtension.lowercased() == "mp3" else {
+                errorMessage = "mp3 파일만 등록할 수 있어요."
+                return
+            }
+            importSong(from: url)
+        }
+    }
+
+    private func importSong(from sourceURL: URL) {
+        let accessed = sourceURL.startAccessingSecurityScopedResource()
+        defer { if accessed { sourceURL.stopAccessingSecurityScopedResource() } }
+
+        let title = sourceURL.deletingPathExtension().lastPathComponent
+        let song: Song
+        do {
+            song = try library.beginImport(sourceURL: sourceURL, title: title)
+        } catch {
+            errorMessage = "파일을 불러오지 못했어요: \(error.localizedDescription)"
+            return
+        }
+
+        isImporting = true
+        importProgress = 0
+        importStatusText = "시작하는 중..."
+        library.updateStatus(song.id, to: .processing)
+
+        let localFileURL = library.originalFileURL(for: song)
+        let stemsDir = library.stemsDirectory(for: song)
+        let chartsDir = library.chartsDirectory(for: song)
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let output = try ChartGenerationPipeline.generateChart(mp3URL: localFileURL) { status, fraction in
+                    DispatchQueue.main.async {
+                        importStatusText = status
+                        importProgress = fraction
+                    }
+                }
+
+                try FileManager.default.createDirectory(at: stemsDir, withIntermediateDirectories: true)
+                try FileManager.default.createDirectory(at: chartsDir, withIntermediateDirectories: true)
+
+                var available: [Instrument] = []
+                for (instrument, audio) in output.stemAudio {
+                    let stemURL = stemsDir.appendingPathComponent("\(instrument.rawValue).wav")
+                    try AudioFileLoader.writeWav(audio, sampleRate: 44100, to: stemURL)
+                }
+                for (instrument, notes) in output.charts {
+                    let chartURL = chartsDir.appendingPathComponent("\(instrument.rawValue).json")
+                    let data = try JSONEncoder().encode(notes)
+                    try data.write(to: chartURL, options: .atomic)
+                    if !notes.isEmpty { available.append(instrument) }
+                }
+
+                DispatchQueue.main.async {
+                    library.finalizeImport(song.id, duration: output.duration, availableInstruments: available)
+                    isImporting = false
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    library.markFailed(song.id)
+                    isImporting = false
+                    errorMessage = "채보 생성에 실패했어요: \(error.localizedDescription)"
+                }
+            }
+        }
     }
 }

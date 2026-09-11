@@ -10,6 +10,7 @@ import SwiftUI
 /// window (see `MultiplayerLayoutView`/`PauseButton`), so it can't be mistaken for another
 /// player's note-touch area.
 struct MultiplayerGameContainerView: View {
+    let song: Song
     let instruments: [Instrument]
     @EnvironmentObject private var router: AppRouter
     @StateObject private var orchestrator: MultiGameOrchestrator
@@ -17,7 +18,8 @@ struct MultiplayerGameContainerView: View {
     @State private var showPauseMenu = false
     @State private var pendingResumeAction: PendingResumeAction?
 
-    init(instruments: [Instrument]) {
+    init(song: Song, instruments: [Instrument]) {
+        self.song = song
         self.instruments = instruments
         _orchestrator = StateObject(wrappedValue: MultiGameOrchestrator(playerCount: instruments.count))
     }
@@ -33,7 +35,7 @@ struct MultiplayerGameContainerView: View {
                     onHome: { router.goHome() }
                 )
             } else {
-                MultiplayerLayoutView(gameStates: orchestrator.gameStates, instruments: instruments, onPauseTapped: pause)
+                MultiplayerLayoutView(song: song, gameStates: orchestrator.gameStates, instruments: instruments, onPauseTapped: pause)
                     .id(sessionId)
             }
 

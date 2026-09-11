@@ -5,6 +5,7 @@ import SwiftUI
 /// song-list option use the shared `AppRouter` to jump back regardless of how deep this
 /// screen sits in the navigation stack.
 struct GameContainerView: View {
+    let song: Song
     let instrument: Instrument
     @EnvironmentObject private var router: AppRouter
     @StateObject private var gameState = GameState()
@@ -17,7 +18,15 @@ struct GameContainerView: View {
             if let result = gameState.result {
                 ResultView(result: result, instrument: instrument, onRetry: restart, onHome: { router.goHome() })
             } else {
-                GameView(gameState: gameState, instrument: instrument, onPauseTapped: pause)
+                GameView(
+                    gameState: gameState, instrument: instrument,
+                    chartLoader: { try ChartLoader.loadRuntimeNotes(fromFileURL: SongLibraryStore.shared.chartURL(for: song, instrument: instrument)) },
+                    // Plays the original mixed song, not the separated stem — the stem is
+                    // only ever used offline to generate the chart's onset timings. What
+                    // the player actually hears during play must always be the real song.
+                    audioLoader: { AudioPlaybackController(fileURL: SongLibraryStore.shared.originalFileURL(for: song)) },
+                    onPauseTapped: pause
+                )
                     .id(playSessionId)
             }
 
