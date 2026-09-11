@@ -17,6 +17,10 @@ struct MultiplayerGameContainerView: View {
     @State private var sessionId = UUID()
     @State private var showPauseMenu = false
     @State private var pendingResumeAction: PendingResumeAction?
+    /// See `GameContainerView.gameStarted` — `MultiplayerLayoutView`'s windows start audio
+    /// and note-spawning immediately on mount, so they aren't created until the initial
+    /// 3-2-1 countdown finishes.
+    @State private var gameStarted = false
 
     init(song: Song, instruments: [Instrument]) {
         self.song = song
@@ -34,9 +38,12 @@ struct MultiplayerGameContainerView: View {
                     onRetry: restart,
                     onHome: { router.goHome() }
                 )
-            } else {
+            } else if gameStarted {
                 MultiplayerLayoutView(song: song, gameStates: orchestrator.gameStates, instruments: instruments, onPauseTapped: pause)
                     .id(sessionId)
+            } else {
+                Color(red: 0.04, green: 0.05, blue: 0.10)
+                    .ignoresSafeArea()
             }
 
             if showPauseMenu {
@@ -49,6 +56,8 @@ struct MultiplayerGameContainerView: View {
 
             if let action = pendingResumeAction {
                 CountdownOverlayView(onFinished: { completeCountdown(action) })
+            } else if !gameStarted {
+                CountdownOverlayView(onFinished: { gameStarted = true })
             }
         }
         .navigationBarHidden(true)

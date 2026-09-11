@@ -12,12 +12,16 @@ struct GameContainerView: View {
     @State private var playSessionId = UUID()
     @State private var showPauseMenu = false
     @State private var pendingResumeAction: PendingResumeAction?
+    /// `GameView`/`RhythmScene` aren't created until the very first 3-2-1 countdown
+    /// finishes — `RhythmScene.didMove(to:)` starts audio and note-spawning immediately
+    /// on mount, so mounting it early would skip the countdown for the initial start.
+    @State private var gameStarted = false
 
     var body: some View {
         ZStack {
             if let result = gameState.result {
                 ResultView(result: result, instrument: instrument, onRetry: restart, onHome: { router.goHome() })
-            } else {
+            } else if gameStarted {
                 GameView(
                     gameState: gameState, instrument: instrument,
                     chartLoader: { try ChartLoader.loadRuntimeNotes(fromFileURL: SongLibraryStore.shared.chartURL(for: song, instrument: instrument)) },
@@ -28,6 +32,9 @@ struct GameContainerView: View {
                     onPauseTapped: pause
                 )
                     .id(playSessionId)
+            } else {
+                Color(red: 0.04, green: 0.05, blue: 0.10)
+                    .ignoresSafeArea()
             }
 
             if showPauseMenu {
@@ -40,6 +47,8 @@ struct GameContainerView: View {
 
             if let action = pendingResumeAction {
                 CountdownOverlayView(onFinished: { completeCountdown(action) })
+            } else if !gameStarted {
+                CountdownOverlayView(onFinished: { gameStarted = true })
             }
         }
         .navigationBarHidden(true)

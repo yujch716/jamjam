@@ -19,12 +19,29 @@ final class AudioPlaybackController {
         engine.connect(player, to: engine.mainMixerNode, format: file.processingFormat)
     }
 
+    /// Without an active `.playback` session, `engine.start()` throws on a real device
+    /// (the app never otherwise configures/activates an audio session) and playback
+    /// silently never begins — this is what caused gameplay to be silent.
+    private func activateAudioSession() -> Bool {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playback, mode: .default)
+            try session.setActive(true)
+            return true
+        } catch {
+            print("AudioPlaybackController: failed to activate AVAudioSession: \(error)")
+            return false
+        }
+    }
+
     func play() {
         guard !hasStarted else { return }
         hasStarted = true
+        guard activateAudioSession() else { return }
         do {
             try engine.start()
         } catch {
+            print("AudioPlaybackController: engine.start() failed: \(error)")
             return
         }
         player.scheduleFile(file, at: nil)
@@ -38,9 +55,11 @@ final class AudioPlaybackController {
 
     func resume() {
         guard hasStarted else { return }
+        guard activateAudioSession() else { return }
         do {
             try engine.start()
         } catch {
+            print("AudioPlaybackController: engine.start() failed on resume: \(error)")
             return
         }
         player.play()
