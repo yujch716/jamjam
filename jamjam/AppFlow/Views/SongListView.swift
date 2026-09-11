@@ -12,6 +12,13 @@ struct SongListView: View {
     @State private var importStatusText = ""
     @State private var importProgress: Double = 0
     @State private var errorMessage: String?
+    @State private var pendingDeleteSong: Song?
+
+    /// `library.songs` is already sorted newest-first (see `SongLibraryStore.load`) —
+    /// splitting it into these two keeps that relative order within each group, just
+    /// pinning favorites above everything else.
+    private var favoriteSongs: [Song] { library.songs.filter(\.isFavorite) }
+    private var otherSongs: [Song] { library.songs.filter { !$0.isFavorite } }
 
     var body: some View {
         ZStack {
@@ -19,16 +26,19 @@ struct SongListView: View {
                 .ignoresSafeArea()
 
             List {
-                ForEach(library.songs) { song in
-                    songRow(song)
-                        .listRowBackground(Color.white.opacity(0.05))
-                        .swipeActions {
-                            Button(role: .destructive) {
-                                library.delete(song)
-                            } label: {
-                                Label("삭제", systemImage: "trash")
-                            }
-                        }
+                if !favoriteSongs.isEmpty {
+                    Section {
+                        songRows(favoriteSongs)
+                    } header: {
+                        Text("⭐ 즐겨찾기").foregroundStyle(.white.opacity(0.6))
+                    }
+                    Section {
+                        songRows(otherSongs)
+                    } header: {
+                        Text("전체 곡").foregroundStyle(.white.opacity(0.6))
+                    }
+                } else {
+                    songRows(otherSongs)
                 }
             }
             .scrollContentBackground(.hidden)
@@ -57,6 +67,37 @@ struct SongListView: View {
             Button("확인") { errorMessage = nil }
         } message: {
             Text(errorMessage ?? "")
+        }
+        .confirmationDialog(
+            "\"\(pendingDeleteSong?.title ?? "")\"을(를) 삭제할까요?\n원본 음원, 분리된 트랙, 채보가 모두 삭제되며 되돌릴 수 없어요.",
+            isPresented: Binding(get: { pendingDeleteSong != nil }, set: { if !$0 { pendingDeleteSong = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("삭제", role: .destructive) { confirmDelete() }
+            Button("취소", role: .cancel) { pendingDeleteSong = nil }
+        }
+    }
+
+    @ViewBuilder
+    private func songRows(_ songs: [Song]) -> some View {
+        ForEach(songs) { song in
+            songRow(song)
+                .listRowBackground(Color.white.opacity(0.05))
+                .swipeActions {
+                    Button(role: .destructive) {
+                        pendingDeleteSong = song
+                    } label: {
+                        Label("삭제", systemImage: "trash")
+                    }
+                }
+        }
+    }
+
+    private func confirmDelete() {
+        guard let song = pendingDeleteSong else { return }
+        pendingDeleteSong = nil
+        if !library.delete(song) {
+            errorMessage = "일부 파일을 삭제하지 못했어요. 저장 공간을 다시 확인해 주세요."
         }
     }
 
@@ -219,7 +260,7 @@ struct SongListView: View {
                 }
             } catch {
                 DispatchQueue.main.async {
-                    library.markFailed(song.id)
+                    library.markFailed(song.id, reason: error.localizedDescription)
                     isImporting = false
                     errorMessage = "채보 생성에 실패했어요: \(error.localizedDescription)"
                 }

@@ -97,10 +97,26 @@ final class SongLibraryStore: ObservableObject {
         save()
     }
 
-    func delete(_ song: Song) {
+    /// Removes the song from the index AND its entire on-disk directory (original mp3 +
+    /// every separated stem + every instrument's note_chart — everything lives under
+    /// `songDirectory(for:)`, so one recursive removal is enough to reclaim all of it).
+    /// Returns `false` if the on-disk removal failed (index removal still proceeds either
+    /// way — a broken/orphaned entry helps no one) so the caller can surface that instead
+    /// of silently leaving files behind.
+    @discardableResult
+    func delete(_ song: Song) -> Bool {
+        let dir = songDirectory(for: song)
+        var diskRemovalSucceeded = true
+        if fileManager.fileExists(atPath: dir.path) {
+            do {
+                try fileManager.removeItem(at: dir)
+            } catch {
+                diskRemovalSucceeded = false
+            }
+        }
         songs.removeAll { $0.id == song.id }
-        try? fileManager.removeItem(at: songDirectory(for: song))
         save()
+        return diskRemovalSucceeded
     }
 
     /// Registers a new song in `.importing` state and copies the source file into its
